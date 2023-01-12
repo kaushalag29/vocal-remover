@@ -108,7 +108,7 @@ class Separator(object):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--gpu', '-g', type=int, default=-1)
-    p.add_argument('--pretrained_model', '-P', type=str, default='models/baseline.pth')
+    p.add_argument('--pretrained_model', '-P', type=str, default='models/MGM_HIGHEND_v4_sr44100_hl1024_nf2048.pth')
     p.add_argument('--input', '-i', required=True)
     p.add_argument('--sr', '-r', type=int, default=44100)
     p.add_argument('--n_fft', '-f', type=int, default=2048)
@@ -121,59 +121,63 @@ def main():
     p.add_argument('--output_dir', '-o', type=str, default="")
     args = p.parse_args()
 
-    print('loading model...', end=' ')
+    print('Loading model...')
     device = torch.device('cpu')
     model = nets.CascadedNet(args.n_fft, 32, 128)
     model.load_state_dict(torch.load(args.pretrained_model, map_location=device))
     if torch.cuda.is_available() and args.gpu >= 0:
         device = torch.device('cuda:{}'.format(args.gpu))
         model.to(device)
-    print('done')
+    print('Model loaded')
 
-    print('loading wave source...', end=' ')
-    X, sr = librosa.load(
-        args.input, args.sr, False, dtype=np.float32, res_type='kaiser_fast')
-    basename = os.path.splitext(os.path.basename(args.input))[0]
-    print('done')
+    input_file_list = args.input.split(',')
+    for input_file in input_file_list:
+        basename = os.path.splitext(os.path.basename(input_file))[0]
+        print("Processing {} ...".format(basename))
+        print('Loading wave source...', end=' ')
+        X, sr = librosa.load(
+            input_file, args.sr, False, dtype=np.float32, res_type='kaiser_fast')
+        basename = os.path.splitext(os.path.basename(args.input))[0]
+        print('Loaded wave source...')
 
-    if X.ndim == 1:
-        # mono to stereo
-        X = np.asarray([X, X])
+        if X.ndim == 1:
+            # mono to stereo
+            X = np.asarray([X, X])
 
-    print('stft of wave source...', end=' ')
-    X_spec = spec_utils.wave_to_spectrogram(X, args.hop_length, args.n_fft)
-    print('done')
+        print('stft of wave source...', end=' ')
+        X_spec = spec_utils.wave_to_spectrogram(X, args.hop_length, args.n_fft)
+        print('done')
 
-    sp = Separator(model, device, args.batchsize, args.cropsize, args.postprocess)
+        sp = Separator(model, device, args.batchsize, args.cropsize, args.postprocess)
 
-    if args.tta:
-        y_spec, v_spec = sp.separate_tta(X_spec)
-    else:
-        y_spec, v_spec = sp.separate(X_spec)
+        if args.tta:
+            y_spec, v_spec = sp.separate_tta(X_spec)
+        else:
+            y_spec, v_spec = sp.separate(X_spec)
 
-    print('validating output directory...', end=' ')
-    output_dir = args.output_dir
-    if output_dir != "":  # modifies output_dir if theres an arg specified
-        output_dir = output_dir.rstrip('/') + '/'
-        os.makedirs(output_dir, exist_ok=True)
-    print('done')
+        # print('validating output directory...', end=' ')
+        # output_dir = args.output_dir
+        # if output_dir != "":  # modifies output_dir if theres an arg specified
+        #     output_dir = output_dir.rstrip('/') + '/'
+        #     os.makedirs(output_dir, exist_ok=True)
+        # print('done')
 
-    print('inverse stft of instruments...', end=' ')
-    wave = spec_utils.spectrogram_to_wave(y_spec, hop_length=args.hop_length)
-    print('done')
-    sf.write('{}{}_Instruments.wav'.format(output_dir, basename), wave.T, sr)
+        print('inverse stft of instruments...', end=' ')
+        wave = spec_utils.spectrogram_to_wave(y_spec, hop_length=args.hop_length)
+        print('done')
+        sf.write('{}_Instruments.wav'.format(basename), wave.T, sr)
 
-    print('inverse stft of vocals...', end=' ')
-    wave = spec_utils.spectrogram_to_wave(v_spec, hop_length=args.hop_length)
-    print('done')
-    sf.write('{}{}_Vocals.wav'.format(output_dir, basename), wave.T, sr)
+        # print('inverse stft of vocals...', end=' ')
+        # wave = spec_utils.spectrogram_to_wave(v_spec, hop_length=args.hop_length)
+        # print('done')
+        # sf.write('{}{}_Vocals.wav'.format(output_dir, basename), wave.T, sr)
 
-    if args.output_image:
-        image = spec_utils.spectrogram_to_image(y_spec)
-        utils.imwrite('{}{}_Instruments.jpg'.format(output_dir, basename), image)
+        if args.output_image:
+            image = spec_utils.spectrogram_to_image(y_spec)
+            utils.imwrite('{}_Instruments.jpg'.format(basename), image)
 
-        image = spec_utils.spectrogram_to_image(v_spec)
-        utils.imwrite('{}{}_Vocals.jpg'.format(output_dir, basename), image)
+            # image = spec_utils.spectrogram_to_image(v_spec)
+            # utils.imwrite('{}{}_Vocals.jpg'.format(output_dir, basename), image)
 
 
 if __name__ == '__main__':
