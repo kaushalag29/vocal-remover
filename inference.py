@@ -139,11 +139,11 @@ def main():
 
     input_file_list = args.input.split(',')
     for input_file in input_file_list:
-        basename = os.path.splitext(os.path.basename(args.input))[0]
+        basename = os.path.splitext(os.path.basename(input_file))[0]
         print("Processing {} ...".format(basename))
         print('loading wave source...', end=' ')
         X, sr = librosa.load(
-            args.input, sr=args.sr, mono=False, dtype=np.float32, res_type='kaiser_fast'
+            input_file, sr=args.sr, mono=False, dtype=np.float32, res_type='kaiser_fast'
         )
     
         print('done')
