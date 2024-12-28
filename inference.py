@@ -1,5 +1,6 @@
 import argparse
 import os
+import gc
 
 import librosa
 import numpy as np
@@ -182,7 +183,9 @@ def main():
 
             image = spec_utils.spectrogram_to_image(v_spec)
             utils.imwrite('{}_Vocals.jpg'.format(basename), image)
-
+    del model
+    torch.cuda.empty_cache()
+    gc.collect()
 
 if __name__ == '__main__':
     main()
