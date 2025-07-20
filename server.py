@@ -18,6 +18,7 @@ class SeparationRequest(BaseModel):
     gpu: bool = False
     tta: bool = True
     postprocess: bool = False
+    complex: bool = False
 
 def execute_separation_command(cmd):
     """Executes a command and logs its output."""
@@ -47,8 +48,8 @@ async def separate_audio(request: SeparationRequest):
         
         if request.tta:
             cmd += " --tta"
-        if request.postprocess:
-            cmd += " --postprocess"
+        if request.complex:
+            cmd += " --complex"
         if request.gpu:
             cmd += " --gpu 0"
             
