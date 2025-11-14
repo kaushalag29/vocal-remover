@@ -60,6 +60,11 @@ async def separate_audio(request: SeparationRequest):
         logger.error(f"Error during audio separation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "model": "vocal-remover"}
+
 @app.post("/shutdown")
 async def shutdown():
     logger.info("Shutdown request received, terminating server.")
@@ -68,4 +73,7 @@ async def shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8015) 
+    # Port is configurable via environment variable
+    port = int(os.environ.get("PORT", 8015))
+    logger.info(f"Starting Vocal Remover server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port) 
