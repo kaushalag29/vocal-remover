@@ -3,6 +3,7 @@ import subprocess
 import shlex
 import logging
 import signal
+import sys
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -42,9 +43,10 @@ async def separate_audio(request: SeparationRequest):
     try:
         # The inference script can take a comma-separated list of files.
         input_list_format = ",".join(request.input_paths)
-        
-        # We assume this server is run from the 'vocal-remover' directory.
-        cmd = f"python inference.py --input '{input_list_format}' --pretrained_model '{request.pretrained_model}'"
+
+        # Use sys.executable to ensure subprocess uses the same Python interpreter
+        # that's running this server (with all conda environment packages)
+        cmd = f"{sys.executable} inference.py --input '{input_list_format}' --pretrained_model '{request.pretrained_model}'"
         
         if request.tta:
             cmd += " --tta"
@@ -54,8 +56,37 @@ async def separate_audio(request: SeparationRequest):
             cmd += " --gpu 0"
             
         execute_separation_command(cmd)
-        
-        return {"status": "success", "message": "Audio separation completed."}
+
+        # Build output file paths based on inference.py's naming convention
+        # inference.py writes files to the current working directory
+        vocals = []
+        instrumentals = []
+
+        for input_path in request.input_paths:
+            basename = os.path.splitext(os.path.basename(input_path))[0]
+            vocal_path = f"{basename}_Vocals.wav"
+            instrumental_path = f"{basename}_Instruments.wav"
+
+            # Verify files were created
+            if not os.path.exists(vocal_path):
+                logger.error(f"Expected vocal file not found: {vocal_path}")
+                raise HTTPException(status_code=500, detail=f"Vocal file not created: {vocal_path}")
+            if not os.path.exists(instrumental_path):
+                logger.error(f"Expected instrumental file not found: {instrumental_path}")
+                raise HTTPException(status_code=500, detail=f"Instrumental file not created: {instrumental_path}")
+
+            # Convert to absolute paths
+            vocals.append(os.path.abspath(vocal_path))
+            instrumentals.append(os.path.abspath(instrumental_path))
+
+        logger.info(f"Audio separation completed: {len(vocals)} vocal files, {len(instrumentals)} instrumental files")
+        return {
+            "vocals": vocals,
+            "instrumentals": instrumentals
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error during audio separation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
