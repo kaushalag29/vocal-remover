@@ -7,6 +7,7 @@ import sys
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
+import torch
 
 app = FastAPI(title="Vocal Remover API")
 
@@ -47,13 +48,22 @@ async def separate_audio(request: SeparationRequest):
         # Use sys.executable to ensure subprocess uses the same Python interpreter
         # that's running this server (with all conda environment packages)
         cmd = f"{sys.executable} inference.py --input '{input_list_format}' --pretrained_model '{request.pretrained_model}'"
-        
+
         if request.tta:
             cmd += " --tta"
         if request.complex:
             cmd += " --complex"
-        if request.gpu:
+
+        # Check if GPU is available (CUDA for NVIDIA, MPS for Apple Silicon)
+        use_gpu = torch.cuda.is_available() or (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available())
+        if use_gpu:
+            if torch.cuda.is_available():
+                logger.info(f"CUDA GPU available. CUDA version: {torch.version.cuda}")
+            elif torch.backends.mps.is_available():
+                logger.info("Apple Metal Performance Shaders (MPS) GPU available")
             cmd += " --gpu 0"
+        else:
+            logger.info("GPU not available. Using CPU for vocal separation")
             
         execute_separation_command(cmd)
 
